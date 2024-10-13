@@ -2,6 +2,8 @@ module NucleusRails
   class ResponseAdapter
     attr_reader :controller
 
+    FILE_TYPES = %i[csv pdf png jpeg jpg gif bmp svg mp4 mp3 wav webm ogg zip tar].freeze
+
     # `controller` is an instance of either:
     # - ActionController::Base
     # - ActionController::API
@@ -19,24 +21,24 @@ module NucleusRails
     # - `filename`: The name for any file downloads (optional).
     # - `type`: The MIME type of the response (e.g., "application/json").
     # - `disposition`: Content disposition (e.g., "inline" or "attachment").
-    # rubocop:disable Rails/OutputSafety, Metrics/AbcSize;
+    # rubocop:disable Rails/OutputSafety, ;
     def call(entity)
       init_render_context(entity)
 
-      case entity.format
-      when :json, :xml
-        controller.render(entity.format => entity.content, **render_attributes(entity))
-      when :html
-        controller.render(entity.format => entity.content.html_safe, **render_attributes(entity))
-      when :text, :plain
-        controller.render(plain: entity.content, **render_attributes(entity))
-      when :pdf, :csv
+      requested_format = entity.format&.to_sym
+
+      case requested_format
+      when :json, :xml, :text, :atom, :js, :html
+        prepared_format = requested_format == :text ? :plain : requested_format
+        prepared_content = requested_format == :html ? entity.content.html_safe : entity.content
+        controller.render(prepared_format => prepared_content, **render_attributes(entity))
+      when *FILE_TYPES
         controller.send_data(entity.content, render_attributes(entity))
-      when :nothing
+      else
         controller.head(:no_content, render_attributes(entity))
       end
     end
-    # rubocop:enable Rails/OutputSafety, Metrics/AbcSize:
+    # rubocop:enable Rails/OutputSafety:
 
     private
 
